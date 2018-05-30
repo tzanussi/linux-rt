@@ -196,6 +196,13 @@ struct trace_pid_list {
 	unsigned long			*pids;
 };
 
+struct cond_snapshot {
+	void				*cond_data;
+
+	bool				(*update)(struct trace_array *tr,
+						  void *cond_data);
+};
+
 /*
  * The trace array - an array of per-CPU trace arrays. This is the
  * highest level data structure that individual tracers deal with.
@@ -277,6 +284,7 @@ struct trace_array {
 #endif
 	int			time_stamp_abs_ref;
 	struct list_head	hist_vars;
+	struct cond_snapshot	*cond_snapshot;
 };
 
 enum {
@@ -690,7 +698,8 @@ int trace_pid_write(struct trace_pid_list *filtered_pids,
 		    const char __user *ubuf, size_t cnt);
 
 #ifdef CONFIG_TRACER_MAX_TRACE
-void update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu);
+void update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu,
+		   void *cond_data);
 void update_max_tr_single(struct trace_array *tr,
 			  struct task_struct *tsk, int cpu);
 #endif /* CONFIG_TRACER_MAX_TRACE */
@@ -1749,9 +1758,16 @@ static inline bool event_command_needs_rec(struct event_command *cmd_ops)
 	return cmd_ops->flags & EVENT_CMD_FL_NEEDS_REC;
 }
 
+typedef bool (*cond_update)(struct trace_array *tr, void *cond_data);
+
 extern int trace_event_enable_disable(struct trace_event_file *file,
 				      int enable, int soft_disable);
 extern int tracing_alloc_snapshot(void);
+extern void tracing_snapshot_cond(struct trace_array *tr, void *cond_data);
+extern int tracing_snapshot_cond_enable(struct trace_array *tr, void *cond_data, cond_update update);
+
+extern int tracing_snapshot_cond_disable(struct trace_array *tr);
+extern void *tracing_cond_snapshot_data(struct trace_array *tr);
 
 extern const char *__start___trace_bprintk_fmt[];
 extern const char *__stop___trace_bprintk_fmt[];
@@ -1825,7 +1841,7 @@ static inline void trace_event_eval_update(struct trace_eval_map **map, int len)
 #endif
 
 #ifdef CONFIG_TRACER_SNAPSHOT
-void tracing_snapshot_instance(struct trace_array *tr);
+void tracing_snapshot_instance(struct trace_array *tr, void *cond_data);
 int tracing_alloc_snapshot_instance(struct trace_array *tr);
 #else
 static inline void tracing_snapshot_instance(struct trace_array *tr) { }
